@@ -15,6 +15,8 @@ import { getUserEnrolledCourses } from "~/services/enrollmentService";
 import { calculateProgress, getCompletedLessonCount } from "~/services/progressService";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice } from "~/lib/ppp";
+import { getRatingSummariesForCourses } from "~/services/ratingService";
+import { RatingSummary } from "~/components/star-rating";
 
 export function meta() {
   return [
@@ -55,6 +57,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
   }
 
+  const ratings = getRatingSummariesForCourses(courses.map((c) => c.id));
+
   const coursesWithLessonCount = courses.map((course) => {
     const userProgress = progressMap.get(course.id);
     const pppPrice = course.pppEnabled
@@ -66,6 +70,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       progress: userProgress?.progress ?? null,
       completedLessons: userProgress?.completedLessons ?? null,
       pppPrice,
+      rating: ratings.get(course.id)!,
     };
   });
 
@@ -205,10 +210,14 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
                     {course.title}
                   </h3>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-2">
                   <p className="line-clamp-2 text-sm text-muted-foreground">
                     {course.description}
                   </p>
+                  <RatingSummary
+                    average={course.rating.average}
+                    count={course.rating.count}
+                  />
                 </CardContent>
                 {course.progress !== null && course.progress > 0 && (
                   <CardContent className="pt-0">

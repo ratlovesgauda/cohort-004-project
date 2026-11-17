@@ -1,6 +1,8 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/instructor";
 import { getCoursesByInstructor, getLessonCountForCourse } from "~/services/courseService";
+import { getRatingSummariesForCourses } from "~/services/ratingService";
+import { RatingSummary } from "~/components/star-rating";
 import { getEnrollmentCountForCourse } from "~/services/enrollmentService";
 import { getCurrentUserId } from "~/lib/session";
 import { getUserById } from "~/services/userService";
@@ -38,6 +40,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const instructorCourses = getCoursesByInstructor(currentUserId);
 
+  const ratings = getRatingSummariesForCourses(instructorCourses.map((c) => c.id));
+
   const coursesWithStats = instructorCourses.map((course) => {
     const lessonCount = getLessonCountForCourse(course.id);
     const enrollmentCount = getEnrollmentCountForCourse(course.id);
@@ -51,6 +55,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       coverImageUrl: course.coverImageUrl,
       lessonCount,
       enrollmentCount,
+      rating: ratings.get(course.id)!,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
     };
@@ -205,6 +210,11 @@ export default function InstructorDashboard({
                     </span>
                   </div>
                 </div>
+                <RatingSummary
+                  average={course.rating.average}
+                  count={course.rating.count}
+                  className="mt-2"
+                />
               </CardContent>
               <CardFooter>
                 <Link to={`/instructor/${course.id}`} className="w-full">
