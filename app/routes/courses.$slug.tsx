@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import type { Route } from "./+types/courses.$slug";
@@ -42,6 +42,12 @@ import { formatDuration, formatPrice } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice, getCountryTierInfo } from "~/lib/ppp";
+import {
+  getCourseReviewStats,
+  getUserReview,
+  upsertReview,
+} from "~/services/courseReviewService";
+import { StarRatingDisplay, StarRatingInput } from "~/components/star-rating";
 
 export function meta({ data: loaderData }: Route.MetaArgs) {
   const title = loaderData?.course?.title ?? "Course";
@@ -80,7 +86,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
       const progressRecords = getLessonProgressForCourse(
         currentUserId,
-        course.id
+        course.id,
       );
       for (const record of progressRecords) {
         lessonProgressMap[record.lessonId] = record.status;
@@ -102,6 +108,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     : courseWithDetails.price;
   const tierInfo = getCountryTierInfo(country);
 
+  let userReview = null;
+  if (currentUserId) {
+    userReview = getUserReview(currentUserId, course.id);
+  }
+
+  const reviewStats = getCourseReviewStats(course.id);
+
   return {
     course: courseWithDetails,
     salesCopyHtml,
@@ -113,10 +126,44 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     currentUserId,
     pppPrice,
     tierInfo,
+    userReview,
+    reviewStats,
   };
 }
 
 // No action — enrollment is handled via the purchase confirmation page
+
+export async function action({ params, request }: Route.ActionArgs) {
+  const slug = params.slug;
+  const course = getCourseBySlug(slug);
+  if (!course) {
+    return data({ error: "Course not found" }, { status: 404 });
+  }
+
+  const currentUserId = await getCurrentUserId(request);
+  if (!currentUserId) {
+    return data({ error: "Sign in required" }, { status: 401 });
+  }
+
+  const enrolled = isUserEnrolled(currentUserId, course.id);
+  if (!enrolled) {
+    return data(
+      { error: "You must be enrolled to review this course" },
+      { status: 403 },
+    );
+  }
+
+  const body = await request.formData();
+  const rating = parseInt(body.get("rating") as string, 10);
+
+  if (isNaN(rating) || rating < 1 || rating > 5) {
+    return data({ error: "Invalid rating" }, { status: 400 });
+  }
+
+  upsertReview(currentUserId, course.id, rating);
+
+  return data({ ok: true });
+}
 
 export function HydrateFallback() {
   return (
@@ -181,6 +228,8 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     currentUserId,
     pppPrice,
     tierInfo,
+    userReview,
+    reviewStats,
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -193,7 +242,7 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
           prev.delete("already_enrolled");
           return prev;
         },
-        { replace: true }
+        { replace: true },
       );
     }
   }, [searchParams, setSearchParams]);
@@ -201,7 +250,7 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
   const totalDuration = course.modules.reduce(
     (sum, mod) =>
       sum + mod.lessons.reduce((s, l) => s + (l.durationMinutes ?? 0), 0),
-    0
+    0,
   );
 
   const pppPriceLabel = formatPrice(pppPrice);
@@ -288,7 +337,22 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
           {course.categoryName}
         </div>
         <div className="mb-3 flex items-start justify-between gap-4">
-          <h1 className="text-4xl font-bold">{course.title}</h1>
+          <div>
+            <h1 className="text-4xl font-bold">{course.title}</h1>
+            {reviewStats.reviewCount > 0 && (
+              <div className="mt-2 flex items-center gap-2">
+                <StarRatingDisplay
+                  rating={reviewStats.averageRating}
+                  size={18}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {reviewStats.averageRating.toFixed(1)} (
+                  {reviewStats.reviewCount}{" "}
+                  {reviewStats.reviewCount === 1 ? "rating" : "ratings"})
+                </span>
+              </div>
+            )}
+          </div>
           {currentUserId === course.instructorId && (
             <Link to={`/instructor/${course.id}`}>
               <Button variant="outline" size="sm" className="shrink-0">
@@ -346,6 +410,26 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                 Join this course and start learning today.
               </p>
               {enrollButton}
+            </div>
+          )}
+
+          {/* Rate this course */}
+          {enrolled && !isInstructor && (
+            <div className="mt-8 rounded-lg border bg-muted/50 p-6">
+              <h3 className="mb-2 text-lg font-semibold">Rate this course</h3>
+              <p className="mb-4 text-sm text-muted-foreground">
+                {userReview
+                  ? `You rated this course ${userReview.rating} star${userReview.rating > 1 ? "s" : ""}. Change it below.`
+                  : "How was your experience with this course?"}
+              </p>
+              <RateCourseForm
+                slug={course.slug}
+                initialRating={userReview?.rating ?? 0}
+                onSubmit={() => {
+                  // Re-fetch review stats by re-rendering the page
+                  window.location.reload();
+                }}
+              />
             </div>
           )}
 
@@ -522,7 +606,7 @@ function CourseContent({
                                   lesson.durationMinutes,
                                   true,
                                   false,
-                                  false
+                                  false,
                                 )}
                               </span>
                             )}
@@ -553,7 +637,7 @@ function CourseContent({
                                   lesson.durationMinutes,
                                   true,
                                   false,
-                                  false
+                                  false,
                                 )}
                               </span>
                             )}
@@ -569,7 +653,7 @@ function CourseContent({
                                   lesson.durationMinutes,
                                   true,
                                   false,
-                                  false
+                                  false,
                                 )}
                               </span>
                             )}
@@ -583,6 +667,50 @@ function CourseContent({
             </Card>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function RateCourseForm({
+  slug,
+  initialRating,
+  onSubmit,
+}: {
+  slug: string;
+  initialRating: number;
+  onSubmit: () => void;
+}) {
+  const [selectedRating, setSelectedRating] = useState(initialRating);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleRate(rating: number) {
+    setSelectedRating(rating);
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/courses/${slug}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `rating=${rating}`,
+      });
+      if (response.ok) {
+        onSubmit();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      <StarRatingInput
+        rating={selectedRating}
+        onRate={handleRate}
+        size={28}
+        disabled={submitting}
+      />
+      {submitting && (
+        <span className="text-sm text-muted-foreground">Saving...</span>
       )}
     </div>
   );

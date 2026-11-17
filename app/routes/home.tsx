@@ -12,6 +12,8 @@ import { DevUI } from "~/components/dev-ui";
 import { getAllUsers, getUserById } from "~/services/userService";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
+import { getCourseReviewStats } from "~/services/courseReviewService";
+import { StarRatingDisplay } from "~/components/star-rating";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -25,6 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const featured = courses.slice(0, 3).map((course) => ({
     ...course,
     lessonCount: getLessonCountForCourse(course.id),
+    reviewStats: getCourseReviewStats(course.id),
   }));
   const categories = getAllCategories();
   const users = getAllUsers();
@@ -196,6 +199,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                       <BookOpen className="size-3" />
                       {course.lessonCount} lessons
                     </span>
+                    {course.reviewStats.reviewCount > 0 && (
+                      <StarRatingDisplay
+                        rating={course.reviewStats.averageRating}
+                        size={14}
+                        showLabel
+                      />
+                    )}
                   </CardFooter>
                 </Card>
               </Link>

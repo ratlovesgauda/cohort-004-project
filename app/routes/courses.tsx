@@ -15,6 +15,8 @@ import { getUserEnrolledCourses } from "~/services/enrollmentService";
 import { calculateProgress, getCompletedLessonCount } from "~/services/progressService";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice } from "~/lib/ppp";
+import { getCourseReviewStats } from "~/services/courseReviewService";
+import { StarRatingDisplay } from "~/components/star-rating";
 
 export function meta() {
   return [
@@ -57,6 +59,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const coursesWithLessonCount = courses.map((course) => {
     const userProgress = progressMap.get(course.id);
+    const reviewStats = getCourseReviewStats(course.id);
     const pppPrice = course.pppEnabled
       ? calculatePppPrice(course.price, country)
       : course.price;
@@ -66,6 +69,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       progress: userProgress?.progress ?? null,
       completedLessons: userProgress?.completedLessons ?? null,
       pppPrice,
+      reviewStats,
     };
   });
 
@@ -226,15 +230,7 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
                     </div>
                   </CardContent>
                 )}
-                <CardFooter className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <UserAvatar
-                      name={course.instructorName}
-                      avatarUrl={course.instructorAvatarUrl}
-                      className="size-5"
-                    />
-                    {course.instructorName}
-                  </span>
+                <CardFooter className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
                   <span className="font-semibold text-foreground">
                     {course.pppPrice < course.price ? (
                       <span className="flex items-center gap-1.5">
@@ -245,6 +241,22 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
                       </span>
                     ) : (
                       formatPrice(course.price)
+                    )}
+                  </span>
+                  <span className="flex items-center gap-1.5 self-end">
+                    {course.reviewStats.reviewCount > 0 ? (
+                      <>
+                        <StarRatingDisplay
+                          rating={course.reviewStats.averageRating}
+                          size={14}
+                          showLabel
+                        />
+                        <span className="text-muted-foreground">
+                          ({course.reviewStats.reviewCount})
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground/60">No ratings</span>
                     )}
                   </span>
                 </CardFooter>

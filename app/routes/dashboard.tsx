@@ -9,6 +9,8 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { AlertTriangle, BookOpen, CheckCircle2, GraduationCap, PlayCircle } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
 import { data, isRouteErrorResponse } from "react-router";
+import { getCourseReviewStats } from "~/services/courseReviewService";
+import { StarRatingDisplay } from "~/components/star-rating";
 
 export function meta() {
   return [
@@ -45,6 +47,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       enrollment.courseId
     );
     const isCompleted = enrollment.completedAt !== null;
+    const reviewStats = getCourseReviewStats(enrollment.courseId);
 
     return {
       ...enrollment,
@@ -53,6 +56,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       totalLessons,
       nextLessonId: nextLesson?.id ?? null,
       isCompleted,
+      reviewStats,
     };
   });
 
@@ -175,6 +179,15 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
                           style={{ width: `${course.progress}%` }}
                         />
                       </div>
+                      {course.reviewStats.reviewCount > 0 && (
+                        <div className="mt-2">
+                          <StarRatingDisplay
+                            rating={course.reviewStats.averageRating}
+                            size={14}
+                            showLabel
+                          />
+                        </div>
+                      )}
                     </CardContent>
                     <CardFooter>
                       {course.nextLessonId ? (
@@ -240,6 +253,15 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
                           Completed — {course.totalLessons} lessons
                         </span>
                       </div>
+                      {course.reviewStats.reviewCount > 0 && (
+                        <div className="mt-2">
+                          <StarRatingDisplay
+                            rating={course.reviewStats.averageRating}
+                            size={14}
+                            showLabel
+                          />
+                        </div>
+                      )}
                     </CardContent>
                     <CardFooter>
                       <Link
