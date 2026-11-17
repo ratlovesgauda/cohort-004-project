@@ -1,5 +1,6 @@
-import { useEffect } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useFetcher, useSearchParams } from "react-router";
+import { z } from "zod";
 import { toast } from "sonner";
 import type { Route } from "./+types/courses.$slug";
 import {
@@ -33,6 +34,7 @@ import {
   Clock,
   Pencil,
   PlayCircle,
+  Star,
   Users,
 } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
@@ -42,6 +44,13 @@ import { formatDuration, formatPrice } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice, getCountryTierInfo } from "~/lib/ppp";
+import { parseFormData } from "~/lib/validation";
+import {
+  getCourseRatingSummary,
+  getUserRating,
+  setRating,
+} from "~/services/ratingService";
+import { StarRatingDisplay } from "~/components/star-rating";
 
 export function meta({ data: loaderData }: Route.MetaArgs) {
   const title = loaderData?.course?.title ?? "Course";
@@ -67,6 +76,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const lessonCount = getLessonCountForCourse(course.id);
   const currentUserId = await getCurrentUserId(request);
 
+  const rating = getCourseRatingSummary(course.id);
+  let userRating: number | null = null;
   let enrolled = false;
   let progress = 0;
   let lessonProgressMap: Record<number, string> = {};
@@ -74,6 +85,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   if (currentUserId) {
     enrolled = isUserEnrolled(currentUserId, course.id);
+    userRating = getUserRating(currentUserId, course.id);
 
     if (enrolled) {
       progress = calculateProgress(currentUserId, course.id, false, false);
@@ -106,6 +118,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     course: courseWithDetails,
     salesCopyHtml,
     lessonCount,
+    rating,
+    userRating,
     enrolled,
     progress,
     lessonProgressMap,
@@ -116,7 +130,39 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-// No action — enrollment is handled via the purchase confirmation page
+const rateSchema = z.object({
+  intent: z.literal("rate"),
+  rating: z.coerce.number().int().min(1).max(5),
+});
+
+// Enrollment is handled via the purchase confirmation page; the only action
+// here is a student rating the course.
+export async function action({ params, request }: Route.ActionArgs) {
+  const course = getCourseBySlug(params.slug);
+  if (!course) {
+    throw data("Course not found", { status: 404 });
+  }
+
+  const currentUserId = await getCurrentUserId(request);
+  if (!currentUserId) {
+    throw data("You must be logged in", { status: 401 });
+  }
+
+  if (
+    course.instructorId === currentUserId ||
+    !isUserEnrolled(currentUserId, course.id)
+  ) {
+    throw data("Only enrolled students can rate this course", { status: 403 });
+  }
+
+  const parsed = parseFormData(await request.formData(), rateSchema);
+  if (!parsed.success) {
+    throw data("Invalid rating", { status: 400 });
+  }
+
+  setRating(currentUserId, course.id, parsed.data.rating);
+  return { ok: true };
+}
 
 export function HydrateFallback() {
   return (
@@ -174,6 +220,8 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     course,
     salesCopyHtml,
     lessonCount,
+    rating,
+    userRating,
     enrolled,
     progress,
     lessonProgressMap,
@@ -310,6 +358,7 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
             />
             {course.instructorName}
           </span>
+          <StarRatingDisplay average={rating.average} count={rating.count} />
           <span className="flex items-center gap-1">
             <BookOpen className="size-4" />
             {lessonCount} lessons
@@ -407,6 +456,7 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                         </Link>
                       ) : null;
                     })()}
+                  <RateCourse userRating={userRating} />
                   <Link to={teamPurchaseLink}>
                     <Button variant="outline" className="w-full">
                       <Users className="mr-2 size-4" />
@@ -445,6 +495,51 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
             </CardContent>
           </Card>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RateCourse({ userRating }: { userRating: number | null }) {
+  const fetcher = useFetcher();
+  const [hover, setHover] = useState<number | null>(null);
+  const submitted = fetcher.formData?.get("rating");
+  const current = submitted ? Number(submitted) : userRating;
+  const shown = hover ?? current ?? 0;
+
+  return (
+    <div>
+      <div className="mb-1 text-sm font-medium">
+        {current ? "Your rating" : "Rate this course"}
+      </div>
+      <div
+        className="flex items-center gap-0.5"
+        onMouseLeave={() => setHover(null)}
+      >
+        {[1, 2, 3, 4, 5].map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-label={`Rate ${value} ${value === 1 ? "star" : "stars"}`}
+            aria-pressed={current === value}
+            onMouseEnter={() => setHover(value)}
+            onClick={() =>
+              fetcher.submit(
+                { intent: "rate", rating: String(value) },
+                { method: "post" }
+              )
+            }
+            className="rounded p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Star
+              className={`size-6 ${
+                value <= shown
+                  ? "fill-yellow-400 text-yellow-400"
+                  : "text-muted-foreground"
+              }`}
+            />
+          </button>
+        ))}
       </div>
     </div>
   );

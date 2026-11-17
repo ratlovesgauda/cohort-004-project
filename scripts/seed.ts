@@ -56,6 +56,7 @@ async function seed() {
     DROP TABLE IF EXISTS team_members;
     DROP TABLE IF EXISTS teams;
     DROP TABLE IF EXISTS purchases;
+    DROP TABLE IF EXISTS course_ratings;
     DROP TABLE IF EXISTS enrollments;
     DROP TABLE IF EXISTS lessons;
     DROP TABLE IF EXISTS modules;
@@ -1402,6 +1403,19 @@ You've completed the Building REST APIs course. You now have the skills to build
     .run();
 
   console.log("Created 7 enrollments.");
+
+  // Star ratings from enrolled students
+  db.insert(schema.courseRatings)
+    .values([
+      { userId: students[0].id, courseId: course1.id, rating: 5 },
+      { userId: students[1].id, courseId: course1.id, rating: 4 },
+      { userId: students[2].id, courseId: course1.id, rating: 5 },
+      { userId: students[0].id, courseId: course2.id, rating: 4 },
+      { userId: students[2].id, courseId: course2.id, rating: 3 },
+    ])
+    .run();
+
+  console.log("Created 5 course ratings.");
 
   // ─── Lesson Progress ───
 

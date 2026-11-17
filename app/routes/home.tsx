@@ -4,6 +4,8 @@ import type { Route } from "./+types/home";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "~/components/ui/card";
 import { buildCourseQuery, getLessonCountForCourse } from "~/services/courseService";
+import { getCourseRatingSummary } from "~/services/ratingService";
+import { StarRatingDisplay } from "~/components/star-rating";
 import { getAllCategories } from "~/services/categoryService";
 import { CourseStatus } from "~/db/schema";
 import { BookOpen, GraduationCap, Users, ArrowRight, User, Moon, Sun } from "lucide-react";
@@ -25,6 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const featured = courses.slice(0, 3).map((course) => ({
     ...course,
     lessonCount: getLessonCountForCourse(course.id),
+    rating: getCourseRatingSummary(course.id),
   }));
   const categories = getAllCategories();
   const users = getAllUsers();
@@ -186,6 +189,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     <p className="line-clamp-2 text-sm text-muted-foreground">
                       {course.description}
                     </p>
+                    <StarRatingDisplay
+                      average={course.rating.average}
+                      count={course.rating.count}
+                      className="mt-2 text-xs"
+                    />
                   </CardContent>
                   <CardFooter className="flex items-center justify-between text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">

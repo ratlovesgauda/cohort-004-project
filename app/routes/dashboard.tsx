@@ -1,5 +1,7 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/dashboard";
+import { getCourseRatingSummary } from "~/services/ratingService";
+import { StarRatingDisplay } from "~/components/star-rating";
 import { getUserEnrolledCourses } from "~/services/enrollmentService";
 import { calculateProgress, getCompletedLessonCount, getTotalLessonCount, getNextIncompleteLesson } from "~/services/progressService";
 import { getCurrentUserId } from "~/lib/session";
@@ -53,6 +55,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       totalLessons,
       nextLessonId: nextLesson?.id ?? null,
       isCompleted,
+      rating: getCourseRatingSummary(enrollment.courseId),
     };
   });
 
@@ -160,6 +163,11 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
                       <p className="line-clamp-2 text-sm text-muted-foreground">
                         {course.courseDescription}
                       </p>
+                      <StarRatingDisplay
+                        average={course.rating.average}
+                        count={course.rating.count}
+                        className="text-xs"
+                      />
                     </CardHeader>
                     <CardContent className="flex-1">
                       <div className="mb-2 flex items-center justify-between text-sm">
@@ -232,6 +240,11 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
                       <p className="line-clamp-2 text-sm text-muted-foreground">
                         {course.courseDescription}
                       </p>
+                      <StarRatingDisplay
+                        average={course.rating.average}
+                        count={course.rating.count}
+                        className="text-xs"
+                      />
                     </CardHeader>
                     <CardContent className="flex-1">
                       <div className="flex items-center gap-2 text-sm text-green-600">
