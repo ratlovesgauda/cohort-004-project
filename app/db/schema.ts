@@ -4,6 +4,8 @@ import {
   integer,
   real,
   unique,
+  index,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 
 export enum UserRole {
@@ -279,4 +281,32 @@ export const courseRatings = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [unique().on(t.userId, t.courseId)]
+);
+
+export const lessonComments = sqliteTable(
+  "lesson_comments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    lessonId: integer("lesson_id")
+      .notNull()
+      .references(() => lessons.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    parentId: integer("parent_id").references(
+      (): AnySQLiteColumn => lessonComments.id,
+      { onDelete: "cascade" }
+    ),
+    body: text("body").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index("lesson_comments_lesson_idx").on(t.lessonId, t.parentId, t.id),
+    index("lesson_comments_parent_idx").on(t.parentId, t.id),
+  ]
 );

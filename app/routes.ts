@@ -18,6 +18,10 @@ export default [
       "courses/:slug/lessons/:lessonId",
       "routes/courses.$slug.lessons.$lessonId.tsx"
     ),
+    route(
+      "courses/:slug/lessons/:lessonId/comments",
+      "routes/courses.$slug.lessons.$lessonId.comments.ts"
+    ),
     route("instructor", "routes/instructor.tsx"),
     route("instructor/new", "routes/instructor.new.tsx"),
     route("instructor/:courseId", "routes/instructor.$courseId.tsx"),

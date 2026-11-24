@@ -45,6 +45,7 @@ async function seed() {
 
   // Drop and recreate tables for a clean seed
   sqlite.exec(`
+    DROP TABLE IF EXISTS lesson_comments;
     DROP TABLE IF EXISTS video_watch_events;
     DROP TABLE IF EXISTS quiz_answers;
     DROP TABLE IF EXISTS quiz_attempts;
@@ -1416,6 +1417,57 @@ You've completed the Building REST APIs course. You now have the skills to build
     .run();
 
   console.log("Created 5 course ratings.");
+
+  // Lesson comments (course 1, enrolled students + instructor). Inserted in
+  // chronological order so ids match display order. updatedAt === createdAt
+  // means "not edited".
+  function addSeedComment(
+    userId: number,
+    lessonId: number,
+    body: string,
+    createdDaysAgo: number,
+    parentId: number | null = null
+  ) {
+    const ts = daysAgo(createdDaysAgo);
+    return db
+      .insert(schema.lessonComments)
+      .values({ userId, lessonId, parentId, body, createdAt: ts, updatedAt: ts })
+      .returning()
+      .get();
+  }
+
+  const commentLesson = course1LessonIds[0];
+  const welcome = addSeedComment(
+    students[0].id,
+    commentLesson,
+    "Great intro! Is there a recommended editor setup for following along?",
+    20
+  );
+  addSeedComment(
+    instructor1.id,
+    commentLesson,
+    "Welcome! VS Code with the TypeScript extension works well, but any editor is fine.",
+    19,
+    welcome.id
+  );
+  addSeedComment(students[1].id, commentLesson, "I'm using VS Code too, works great.", 19, welcome.id);
+  addSeedComment(students[0].id, commentLesson, "Thanks, both of you!", 18, welcome.id);
+  addSeedComment(students[2].id, commentLesson, "Same here, no issues so far.", 18, welcome.id);
+  addSeedComment(students[1].id, commentLesson, "Worth enabling format-on-save too.", 17, welcome.id);
+  addSeedComment(
+    students[1].id,
+    commentLesson,
+    "The examples in this lesson were really clear.",
+    15
+  );
+  addSeedComment(
+    students[2].id,
+    commentLesson,
+    "Could you share the slides for this lesson?",
+    10
+  );
+
+  console.log("Created 8 lesson comments.");
 
   // ─── Lesson Progress ───
 
